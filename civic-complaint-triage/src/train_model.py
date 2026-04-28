@@ -14,6 +14,10 @@ from sklearn.preprocessing import OneHotEncoder, StandardScaler, FunctionTransfo
 from sklearn.ensemble import RandomForestClassifier
 
 
+def _to_string_array(data):
+    return data.astype(str)
+
+
 def load_feature_data() -> pd.DataFrame:
     project_root = Path(__file__).resolve().parents[1]
     features_path = project_root / "data" / "processed" / "complaints_features.csv"
@@ -119,14 +123,14 @@ def build_preprocessor(X: pd.DataFrame) -> ColumnTransformer:
             ("imputer", SimpleImputer(strategy="most_frequent")),
             (
                 "to_string",
-                FunctionTransformer(lambda data: data.astype(str)),
+                FunctionTransformer(_to_string_array),
             ),
             (
                 "onehot",
                 OneHotEncoder(
                     handle_unknown="infrequent_if_exist",
                     min_frequency=50,
-                    sparse_output=False,
+                        sparse_output=True,
                 ),
             ),
         ]
@@ -180,7 +184,9 @@ def train_models() -> pd.DataFrame:
             ("preprocess", preprocessor),
             (
                 "model",
-                LogisticRegression(max_iter=1000, class_weight="balanced"),
+                LogisticRegression(
+                    max_iter=1000, class_weight="balanced", solver="saga", n_jobs=-1
+                ),
             ),
         ]
     )
