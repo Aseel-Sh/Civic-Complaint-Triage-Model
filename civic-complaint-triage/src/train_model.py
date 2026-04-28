@@ -13,9 +13,7 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler, FunctionTransformer
 from sklearn.ensemble import RandomForestClassifier
 
-
-def _to_string_array(data):
-    return data.astype(str)
+from preprocess_utils import to_string_array
 
 
 def load_feature_data() -> pd.DataFrame:
@@ -103,7 +101,7 @@ def split_data(
     return X_train, X_test, y_train, y_test, "random"
 
 
-def build_preprocessor(X: pd.DataFrame) -> ColumnTransformer:
+def build_preprocessor(X: pd.DataFrame, *, sparse_output: bool) -> ColumnTransformer:
     numeric_features = X.select_dtypes(include=["number", "bool"]).columns
     categorical_features = X.select_dtypes(
         include=["object", "category", "string"]
@@ -123,14 +121,15 @@ def build_preprocessor(X: pd.DataFrame) -> ColumnTransformer:
             ("imputer", SimpleImputer(strategy="most_frequent")),
             (
                 "to_string",
-                FunctionTransformer(_to_string_array),
+                FunctionTransformer(to_string_array),
             ),
             (
                 "onehot",
                 OneHotEncoder(
                     handle_unknown="infrequent_if_exist",
                     min_frequency=50,
-                        sparse_output=True,
+                    max_categories=50,
+                    sparse_output=sparse_output,
                 ),
             ),
         ]
@@ -177,11 +176,12 @@ def train_models() -> pd.DataFrame:
     print(f"Training rows: {len(X_train)}, Testing rows: {len(X_test)}")
     print(f"Features used: {len(feature_cols)}")
 
-    preprocessor = build_preprocessor(X_train)
+    preprocessor_sparse = build_preprocessor(X_train, sparse_output=True)
+    preprocessor_dense = build_preprocessor(X_train, sparse_output=False)
 
     logistic_model = Pipeline(
         steps=[
-            ("preprocess", preprocessor),
+            ("preprocess", preprocessor_sparse),
             (
                 "model",
                 LogisticRegression(
@@ -192,7 +192,7 @@ def train_models() -> pd.DataFrame:
     )
     rf_model = Pipeline(
         steps=[
-            ("preprocess", preprocessor),
+            ("preprocess", preprocessor_dense),
             (
                 "model",
                 RandomForestClassifier(
