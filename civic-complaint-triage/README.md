@@ -147,6 +147,15 @@ This is a basic geographic error analysis, not a full fairness audit. Complaint 
 
 This model is a prototype triage signal, not an automated decision system.
 
+## Scoring a New Complaint
+Use the scoring script to estimate the probability that a new complaint remains unresolved beyond 30 days. The score is a triage signal, not an automated decision.
+
+```powershell
+python src/score_complaint.py --input examples/sample_complaint.json
+```
+
+The script prints a probability, default and balanced threshold predictions, and a risk band (low, moderate, high). This should not be used to rank neighborhoods or allocate services automatically.
+
 ## How to interpret the results
 - Accuracy: overall fraction of correct predictions, which can be misleading with class imbalance.
 - Precision: when the model predicts delayed, how often it is correct. Low precision means many false alarms.

@@ -16,6 +16,32 @@ def _safe_rate(numerator: int, denominator: int) -> float:
     return float(numerator) / float(denominator)
 
 
+def _normalize_zip(value) -> str | None:
+    if pd.isna(value):
+        return None
+    if isinstance(value, (int, np.integer)):
+        return str(int(value))
+    if isinstance(value, (float, np.floating)):
+        if float(value).is_integer():
+            return str(int(value))
+        return str(value)
+
+    text = str(value).strip()
+    if text == "":
+        return None
+    if text.isdigit():
+        return text
+
+    try:
+        as_float = float(text)
+    except ValueError:
+        return text
+
+    if float(as_float).is_integer():
+        return str(int(as_float))
+    return text
+
+
 def _zip_metrics(group: pd.DataFrame) -> dict:
     y_true = group["y_true"].astype(int)
     y_pred = group["y_pred"].astype(int)
@@ -87,12 +113,13 @@ def main() -> None:
     preds = (proba >= threshold).astype(int)
 
     results = X_test[["zip_code"]].copy()
+    results["zip_code_clean"] = results["zip_code"].apply(_normalize_zip)
     results["y_true"] = y_test.to_numpy()
     results["y_pred"] = preds
 
     # Focus on the top 10 ZIP codes by volume in the test set.
     top_zips = (
-        results["zip_code"]
+        results["zip_code_clean"]
         .dropna()
         .astype(str)
         .value_counts()
@@ -104,10 +131,10 @@ def main() -> None:
         print("No ZIP codes available after filtering missing values.")
         return
 
-    filtered = results[results["zip_code"].astype(str).isin(top_zips)]
+    filtered = results[results["zip_code_clean"].astype(str).isin(top_zips)]
 
     summary_rows = []
-    for zip_code, group in filtered.groupby("zip_code"):
+    for zip_code, group in filtered.groupby("zip_code_clean"):
         metrics = _zip_metrics(group)
         metrics["zip_code"] = str(zip_code)
         summary_rows.append(metrics)

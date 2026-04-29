@@ -1,0 +1,19 @@
+{
+  "input": {
+    "complaint_type": "VACANT LOTS",
+    "complaint_source": "311",
+    "zip_code": "19134",
+    "submitted_month": 6,
+    "submitted_dayofweek": 2,
+    "is_weekend": 0,
+    "lat": 39.9922,
+    "lng": -75.0896
+  },
+  "risk_score": 0.622,
+  "default_threshold": 0.5,
+  "balanced_threshold": 0.7,
+  "default_prediction": "Delayed",
+  "balanced_prediction": "Not delayed",
+  "risk_band": "Moderate",
+  "interpretation": "This complaint has moderate delay risk. It should be treated as a triage signal, not an automated decision."
+}
