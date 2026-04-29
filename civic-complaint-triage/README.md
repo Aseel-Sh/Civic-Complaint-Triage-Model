@@ -136,6 +136,15 @@ Feature importance:
 - Random forest feature importance saved to `reports/random_forest_feature_importance.csv`.
 - Top features chart saved to `reports/figures/random_forest_top_features.png`.
 
+## Geographic Error Analysis
+This project includes a basic ZIP-level error analysis to check whether model errors vary across high-volume ZIP codes. It is not a fairness audit and should not be used to rank neighborhoods or allocate services automatically. Complaint data can reflect reporting behavior and service patterns, so geographic comparisons require caution. The goal is to see whether model error rates differ across the ZIP codes with the most complaints.
+
+To check whether model behavior varied across high-volume ZIP codes, I compared actual and predicted delayed rates for the top 10 ZIP codes in the test set using the delayed_30 random forest model at the balanced threshold of 0.7.
+
+The model’s predicted delayed rates were reasonably close to observed rates for several ZIP codes, but there were visible differences. For example, ZIP 19132 had an observed delayed rate of about 0.59 but a predicted delayed rate of about 0.73, while ZIP 19146 had an observed delayed rate of about 0.54 but a predicted delayed rate of about 0.38. This suggests that the model may overestimate delay risk in some areas and underestimate it in others.
+
+This is a basic geographic error analysis, not a full fairness audit. Complaint data may reflect differences in reporting behavior, workload, property conditions, and city service patterns. These results should not be used to rank neighborhoods or allocate services automatically.
+
 This model is a prototype triage signal, not an automated decision system.
 
 ## How to interpret the results
