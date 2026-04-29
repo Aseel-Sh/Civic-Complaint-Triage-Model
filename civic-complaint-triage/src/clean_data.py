@@ -74,7 +74,7 @@ def clean_data() -> pd.DataFrame:
             f"Raw data not found at {raw_path}. Run download_data.py first."
         )
 
-    df = pd.read_csv(raw_path)
+    df = pd.read_csv(raw_path, low_memory=False)
     rows_before = len(df)
 
     opened_col, closed_col = _infer_date_columns(df)
@@ -95,7 +95,10 @@ def clean_data() -> pd.DataFrame:
     df = df[df["days_to_resolution"] >= 0]
 
     median_days = df["days_to_resolution"].median()
+    top25_threshold = df["days_to_resolution"].quantile(0.75)
     df["delayed"] = (df["days_to_resolution"] > median_days).astype(int)
+    df["delayed_30"] = (df["days_to_resolution"] > 30).astype(int)
+    df["delayed_top25"] = (df["days_to_resolution"] >= top25_threshold).astype(int)
 
     df["submitted_month"] = df["opened_date"].dt.month
     df["submitted_dayofweek"] = df["opened_date"].dt.dayofweek

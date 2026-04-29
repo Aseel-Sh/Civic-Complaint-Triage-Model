@@ -35,7 +35,7 @@ def build_features() -> pd.DataFrame:
             f"Cleaned data not found at {cleaned_path}. Run clean_data.py first."
         )
 
-    df = pd.read_csv(cleaned_path)
+    df = pd.read_csv(cleaned_path, low_memory=False)
     df = add_aggregate_features(df)
     df.to_csv(features_path, index=False)
 

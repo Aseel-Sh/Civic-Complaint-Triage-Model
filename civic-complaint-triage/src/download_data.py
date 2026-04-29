@@ -19,10 +19,10 @@ def download_data(force: bool = False) -> pd.DataFrame:
 
     if raw_path.exists() and not force:
         print(f"Raw data already exists at {raw_path}. Use --force to re-download.")
-        df = pd.read_csv(raw_path)
+        df = pd.read_csv(raw_path, low_memory=False)
     else:
         print("Downloading data...")
-        df = pd.read_csv(DATA_URL)
+        df = pd.read_csv(DATA_URL, low_memory=False)
         df.to_csv(raw_path, index=False)
         print(f"Saved raw data to {raw_path}.")
 

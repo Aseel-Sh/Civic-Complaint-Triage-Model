@@ -1,0 +1,4 @@
+target,definition,threshold,delayed_count,non_delayed_count,delayed_rate
+delayed,median,34.0,461584,462805,0.4993395637550858
+delayed_30,30_days,30.0,482544,441845,0.5220140005993148
+delayed_top25,top25,124.0,231783,692606,0.2507418413676493
