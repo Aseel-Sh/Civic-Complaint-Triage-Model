@@ -205,8 +205,3 @@ The script prints a probability, default and balanced threshold predictions, and
 - Add a simple Streamlit dashboard
 - Use more advanced models
 
-## Resume bullets
-**Civic Complaint Triage Model | Python, pandas, scikit-learn, Matplotlib**
-- Built an end-to-end machine learning pipeline using public Philadelphia L&I complaint data to predict complaints likely to remain unresolved beyond 30 days.
-- Engineered temporal, geographic, and workload features, compared logistic regression and random forest models against a majority-class baseline, and evaluated performance with ROC-AUC, F1, confusion counts, threshold tuning, and feature importance.
-- Tuned model thresholds to compare high-recall screening against a balanced-rate triage setting, improving interpretability by aligning predicted delayed rates more closely with observed complaint outcomes.
