@@ -1,5 +1,10 @@
 # Civic Complaint Triage Model
 
+## Overview
+This project builds a simple triage signal for Philadelphia Licenses and Inspections complaints.
+The primary target is `delayed_30`, because it is the most interpretable delay definition and the main model path in this repo.
+The workflow is: download data, clean and engineer features, train and evaluate the delayed_30 model, then score new complaints.
+
 ## Problem statement
 Create a beginner-friendly model that predicts whether a Philadelphia Licenses and Inspections complaint is likely to have a delayed resolution.
 
@@ -50,21 +55,16 @@ pip install -r requirements.txt
 Python version recommendation: 3.11+ (tested with 3.13).
 
 ## How to run
+Primary run path (`delayed_30`):
 ```powershell
 python src/download_data.py
 python src/clean_data.py
 python src/features.py
-python src/train_model.py --target delayed
-python src/evaluate_model.py --target delayed
 python src/train_model.py --target delayed_30
 python src/evaluate_model.py --target delayed_30
-python src/train_model.py --target delayed_top25
-python src/evaluate_model.py --target delayed_top25
-python src/target_analysis.py
-python src/compare_targets.py
 ```
 
-Fast target comparison (sample + smaller models):
+Optional target sensitivity:
 ```powershell
 python src/train_model.py --target delayed --fast --sample-size 50000
 python src/evaluate_model.py --target delayed
@@ -103,7 +103,7 @@ Latest results (time-based split, 80/20) for the 30-day target:
 
 Random forest threshold summary (primary target: delayed_30):
 - Default threshold (0.5): accuracy 0.606, precision 0.601, recall 0.873, F1 0.712, ROC-AUC 0.632
-- Balanced-rate threshold: read from `reports/model_metrics_delayed_30.csv` after training; if the saved value is missing, `zip_error_analysis.py` falls back to 0.7 with a warning.
+- Balanced-rate threshold: 0.6 from `reports/model_metrics_delayed_30.csv`; if the saved value is missing, the scorer falls back to 0.7 with a warning.
 - Actual delayed rate: 0.558; balanced-rate predicted delayed rate: 0.516
 
 Plain-English interpretation:
@@ -154,7 +154,22 @@ Use the scoring script to estimate the probability that a new complaint remains 
 python src/score_complaint.py --input examples/sample_complaint.json
 ```
 
-The script prints a probability, default and balanced threshold predictions, and a risk band (low, moderate, high). This should not be used to rank neighborhoods or allocate services automatically.
+The script prints a probability, default and balanced threshold predictions, and a risk band (low, moderate, high). It reads the balanced threshold from `reports/model_metrics_delayed_30.csv` and currently uses 0.6 from the saved random forest metrics. This should not be used to rank neighborhoods or allocate services automatically.
+
+## Batch Scoring
+Use batch scoring when you want to score several complaints from a CSV file.
+
+```powershell
+python src/score_complaint.py --batch examples/sample_complaints.csv --output reports/scored_sample_complaints.csv
+```
+
+Output columns:
+- Input columns from the CSV
+- `delay_probability`
+- `default_prediction`
+- `balanced_prediction`
+- `risk_band`
+- `interpretation`
 
 ## How to interpret the results
 - Accuracy: overall fraction of correct predictions, which can be misleading with class imbalance.
@@ -172,15 +187,14 @@ The script prints a probability, default and balanced threshold predictions, and
     - `python src/download_data.py`
     - `python src/clean_data.py`
     - `python src/features.py`
-    - `python src/train_model.py`
-    - `python src/evaluate_model.py`
+    - `python src/train_model.py --target delayed_30`
+    - `python src/evaluate_model.py --target delayed_30`
 - Expected outputs:
     - `data/raw/complaints.csv`
     - `data/processed/complaints_cleaned.csv`
     - `data/processed/complaints_features.csv`
     - `models/logistic_regression.pkl`
     - `models/random_forest.pkl`
-    - `reports/model_metrics_delayed.csv`
     - `reports/model_metrics_delayed.csv`
     - `reports/model_metrics_delayed_30.csv`
     - `reports/model_metrics_delayed_top25.csv`
@@ -202,7 +216,6 @@ The script prints a probability, default and balanced threshold predictions, and
 ## Future improvements
 - Add fairness checks by region
 - Add richer geospatial analysis
-- Test a 30-day delay threshold
 - Add a simple Streamlit dashboard
 - Use more advanced models
 

@@ -24,6 +24,41 @@ INPUT_FIELDS = [
 ]
 
 
+def _load_balanced_threshold(project_root: Path) -> float:
+    metrics_path = project_root / "reports" / "model_metrics_delayed_30.csv"
+    fallback_threshold = 0.7
+
+    if not metrics_path.exists():
+        print(
+            f"Warning: {metrics_path} not found; using balanced threshold {fallback_threshold:.1f}."
+        )
+        return fallback_threshold
+
+    metrics_df = pd.read_csv(metrics_path)
+    rf_rows = metrics_df.loc[metrics_df["model"] == "random_forest"]
+    if rf_rows.empty:
+        print(
+            "Warning: random_forest balanced_rate_threshold not found in "
+            f"{metrics_path}; using balanced threshold {fallback_threshold:.1f}."
+        )
+        return fallback_threshold
+
+    threshold = rf_rows.iloc[0].get("balanced_rate_threshold")
+    if pd.isna(threshold):
+        print(
+            f"Warning: random_forest balanced_rate_threshold is missing in {metrics_path}; using balanced threshold {fallback_threshold:.1f}."
+        )
+        return fallback_threshold
+
+    try:
+        return float(threshold)
+    except (TypeError, ValueError):
+        print(
+            f"Warning: random_forest balanced_rate_threshold is invalid in {metrics_path}; using balanced threshold {fallback_threshold:.1f}."
+        )
+        return fallback_threshold
+
+
 def _normalize_zip(value) -> str | None:
     if pd.isna(value):
         return None
@@ -96,6 +131,7 @@ def _validate_input_keys(user_input: dict) -> None:
             + ", ".join(extras)
         )
 
+
 def _validate_input_columns(input_df: pd.DataFrame) -> None:
     extras = sorted(set(input_df.columns) - set(INPUT_FIELDS))
     if extras:
@@ -108,6 +144,7 @@ def _validate_input_columns(input_df: pd.DataFrame) -> None:
         raise ValueError(
             "Batch input has no supported fields. Provide scoring-safe columns."
         )
+
 
 def _default_value(series: pd.Series):
     if series.dropna().empty:
@@ -384,6 +421,7 @@ def main() -> None:
 
     defaults = _build_defaults(df, feature_cols)
     maps = _build_aggregate_maps(df)
+    balanced_threshold = _load_balanced_threshold(project_root)
 
     model = joblib.load(model_path)
 
@@ -411,7 +449,7 @@ def main() -> None:
                 feature_cols,
                 defaults,
                 maps,
-                balanced_threshold=0.7,
+                balanced_threshold=balanced_threshold,
             )
 
             if warnings:
@@ -457,7 +495,7 @@ def main() -> None:
         feature_cols,
         defaults,
         maps,
-        balanced_threshold=0.7,
+        balanced_threshold=balanced_threshold,
     )
 
     print(f"30-Day Delay Risk Score: {probability:.2f}")
@@ -479,7 +517,7 @@ def main() -> None:
         "input": user_input,
         "risk_score": round(probability, 4),
         "default_threshold": 0.5,
-        "balanced_threshold": 0.7,
+        "balanced_threshold": balanced_threshold,
         "default_prediction": default_pred,
         "balanced_prediction": balanced_pred,
         "risk_band": band,
