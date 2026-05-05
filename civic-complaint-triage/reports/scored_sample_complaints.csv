@@ -1,0 +1,6 @@
+complaint_type,complaint_source,zip_code,council_district,lat,lng,submitted_month,submitted_dayofweek,is_weekend,delay_probability,default_prediction,balanced_prediction,risk_band,interpretation
+VACANT LOT,311,19134,7,39.9922,-75.0896,6,2,0,0.57466,Delayed,Not delayed,Moderate,"This complaint has moderate delay risk. It should be treated as a triage signal, not an automated decision."
+VACANT LOTS (CLIP),311,19143,3,39.9449,-75.2283,7,4,0,0.551154,Delayed,Not delayed,Moderate,"This complaint has moderate delay risk. It should be treated as a triage signal, not an automated decision."
+VACANT LOT,311,19146,2,39.9413,-75.1863,10,5,0,0.539959,Delayed,Not delayed,Moderate,"This complaint has moderate delay risk. It should be treated as a triage signal, not an automated decision."
+VACANT LOT,311,19132,4,39.9956,-75.1685,8,6,1,0.526034,Delayed,Not delayed,Moderate,"This complaint has moderate delay risk. It should be treated as a triage signal, not an automated decision."
+VACANT LOTS (CLIP),311,19121,5,39.9807,-75.1772,9,1,0,0.507239,Delayed,Not delayed,Moderate,"This complaint has moderate delay risk. It should be treated as a triage signal, not an automated decision."

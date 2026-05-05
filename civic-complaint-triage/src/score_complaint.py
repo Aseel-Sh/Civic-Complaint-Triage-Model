@@ -11,6 +11,19 @@ import pandas as pd
 from train_model import SAFE_FEATURES, load_feature_data, get_feature_columns
 
 
+INPUT_FIELDS = [
+    "complaint_type",
+    "complaint_source",
+    "zip_code",
+    "council_district",
+    "lat",
+    "lng",
+    "submitted_month",
+    "submitted_dayofweek",
+    "is_weekend",
+]
+
+
 def _normalize_zip(value) -> str | None:
     if pd.isna(value):
         return None
@@ -76,7 +89,7 @@ def _load_input(path: Path | None) -> dict:
 
 
 def _validate_input_keys(user_input: dict) -> None:
-    extras = sorted({key for key in user_input.keys()} - set(SAFE_FEATURES))
+    extras = sorted({key for key in user_input.keys()} - set(INPUT_FIELDS))
     if extras:
         raise ValueError(
             "Input contains unsupported fields. Remove these keys: "
@@ -85,7 +98,7 @@ def _validate_input_keys(user_input: dict) -> None:
 
 
 def _validate_input_columns(input_df: pd.DataFrame) -> None:
-    extras = sorted(set(input_df.columns) - set(SAFE_FEATURES))
+    extras = sorted(set(input_df.columns) - set(INPUT_FIELDS))
     if extras:
         raise ValueError(
             "Batch input contains unsupported fields. Remove these columns: "
