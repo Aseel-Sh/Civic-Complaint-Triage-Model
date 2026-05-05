@@ -18,7 +18,7 @@ from sklearn.metrics import (
     roc_auc_score,
 )
 
-from train_model import load_feature_data, select_feature_columns, split_data
+from train_model import load_feature_data, get_feature_columns, split_data
 
 
 def _confusion_counts(y_true: pd.Series, y_pred: pd.Series) -> dict:
@@ -218,7 +218,7 @@ def evaluate_models(target_column: str) -> pd.DataFrame:
     df = load_feature_data()
     if target_column not in df.columns:
         raise ValueError(f"Target column '{target_column}' not found in data.")
-    feature_cols = select_feature_columns(df, target_column)
+    feature_cols = get_feature_columns(df, target_column, reports_dir)
     X_train, X_test, y_train, y_test, split_method = split_data(
         df, feature_cols, target_column
     )

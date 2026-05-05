@@ -7,6 +7,7 @@ import pandas as pd
 
 def add_aggregate_features(df: pd.DataFrame) -> pd.DataFrame:
     if "complaint_type" in df.columns:
+        # Aggregate counts must be based on readable complaint categories.
         df["complaint_type_total_count"] = df.groupby("complaint_type")[
             "complaint_type"
         ].transform("count")

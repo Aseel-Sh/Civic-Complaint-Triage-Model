@@ -8,7 +8,7 @@ import joblib
 import numpy as np
 import pandas as pd
 
-from train_model import load_feature_data, select_feature_columns
+from train_model import SAFE_FEATURES, load_feature_data, get_feature_columns
 
 
 def _normalize_zip(value) -> str | None:
@@ -37,10 +37,28 @@ def _normalize_zip(value) -> str | None:
     return text
 
 
+def _normalize_complaint_type(value) -> str | None:
+    if pd.isna(value):
+        return None
+    text = str(value).strip()
+    if text == "":
+        return None
+    return text.upper()
+
+
+def _normalize_complaint_source(value) -> str | None:
+    if pd.isna(value):
+        return None
+    text = str(value).strip()
+    if text == "":
+        return None
+    return text.upper()
+
+
 def _load_input(path: Path | None) -> dict:
     if path is None:
         return {
-            "complaint_type": "VACANT LOTS",
+            "complaint_type": "VACANT LOTS (CLIP)",
             "complaint_source": "311",
             "zip_code": "19134",
             "submitted_month": 6,
@@ -55,6 +73,15 @@ def _load_input(path: Path | None) -> dict:
 
     with path.open("r", encoding="utf-8") as handle:
         return json.load(handle)
+
+
+def _validate_input_keys(user_input: dict) -> None:
+    extras = sorted({key for key in user_input.keys()} - set(SAFE_FEATURES))
+    if extras:
+        raise ValueError(
+            "Input contains unsupported fields. Remove these keys: "
+            + ", ".join(extras)
+        )
 
 
 def _default_value(series: pd.Series):
@@ -87,32 +114,54 @@ def _build_aggregate_maps(df: pd.DataFrame) -> dict:
     else:
         df["zip_code_clean"] = None
 
+    if "complaint_type" in df.columns:
+        df["complaint_type_clean"] = df["complaint_type"].apply(
+            _normalize_complaint_type
+        )
+    else:
+        df["complaint_type_clean"] = None
+
     maps = {
         "complaint_type_total_count": None,
         "zip_total_complaints": None,
         "zip_type_complaint_count": None,
     }
 
-    if "complaint_type" in df.columns and "complaint_type_total_count" in df.columns:
-        maps["complaint_type_total_count"] = (
-            df.groupby("complaint_type")["complaint_type_total_count"].median()
-        )
+    if (
+        "complaint_type_clean" in df.columns
+        and "complaint_type_total_count" in df.columns
+    ):
+        grouped = df.groupby("complaint_type_clean")["complaint_type_total_count"]
+        if pd.api.types.is_numeric_dtype(df["complaint_type_total_count"]):
+            maps["complaint_type_total_count"] = grouped.median()
+        else:
+            maps["complaint_type_total_count"] = grouped.apply(
+                lambda s: s.dropna().iloc[0] if not s.dropna().empty else np.nan
+            )
 
     if "zip_code_clean" in df.columns and "zip_total_complaints" in df.columns:
-        maps["zip_total_complaints"] = (
-            df.groupby("zip_code_clean")["zip_total_complaints"].median()
-        )
+        grouped = df.groupby("zip_code_clean")["zip_total_complaints"]
+        if pd.api.types.is_numeric_dtype(df["zip_total_complaints"]):
+            maps["zip_total_complaints"] = grouped.median()
+        else:
+            maps["zip_total_complaints"] = grouped.apply(
+                lambda s: s.dropna().iloc[0] if not s.dropna().empty else np.nan
+            )
 
     if (
         "zip_code_clean" in df.columns
-        and "complaint_type" in df.columns
+        and "complaint_type_clean" in df.columns
         and "zip_type_complaint_count" in df.columns
     ):
-        maps["zip_type_complaint_count"] = (
-            df.groupby(["zip_code_clean", "complaint_type"])[
-                "zip_type_complaint_count"
-            ].median()
-        )
+        grouped = df.groupby(
+            ["zip_code_clean", "complaint_type_clean"]
+        )["zip_type_complaint_count"]
+        if pd.api.types.is_numeric_dtype(df["zip_type_complaint_count"]):
+            maps["zip_type_complaint_count"] = grouped.median()
+        else:
+            maps["zip_type_complaint_count"] = grouped.apply(
+                lambda s: s.dropna().iloc[0] if not s.dropna().empty else np.nan
+            )
 
     return maps
 
@@ -126,11 +175,27 @@ def _apply_input(
             continue
         if key == "zip_code":
             cleaned[key] = _normalize_zip(value)
+        elif key == "complaint_type":
+            cleaned[key] = _normalize_complaint_type(value)
+        elif key == "complaint_source":
+            cleaned[key] = _normalize_complaint_source(value)
         else:
             cleaned[key] = value
 
     row.update(cleaned)
     return row
+
+
+def _suggest_complaint_types(lookup, complaint_type: str) -> list[str]:
+    if lookup is None:
+        return []
+    if not complaint_type:
+        return []
+    first_word = complaint_type.split()[0]
+    suggestions = [
+        value for value in lookup.index if first_word in str(value).split()
+    ]
+    return suggestions[:5]
 
 
 def _fill_aggregate_features(
@@ -139,37 +204,71 @@ def _fill_aggregate_features(
     maps: dict,
     warnings: list[str],
 ) -> None:
-    complaint_type = row.get("complaint_type")
+    complaint_type = _normalize_complaint_type(row.get("complaint_type"))
     zip_code = _normalize_zip(row.get("zip_code"))
 
     if "complaint_type_total_count" in row:
         lookup = maps.get("complaint_type_total_count")
-        if complaint_type and lookup is not None and complaint_type in lookup:
+        if complaint_type and lookup is not None and complaint_type in lookup.index:
             row["complaint_type_total_count"] = float(lookup[complaint_type])
+            print("Looked up complaint_type_total_count from historical data")
         else:
             row["complaint_type_total_count"] = defaults.get(
                 "complaint_type_total_count", 0
             )
-            warnings.append("complaint_type_total_count fallback used")
+            suggestions = _suggest_complaint_types(lookup, complaint_type)
+            if suggestions:
+                warnings.append(
+                    "complaint_type_total_count fallback used; "
+                    "closest complaint_type examples: "
+                    f"{', '.join(suggestions)}"
+                )
+            else:
+                warnings.append(
+                    "complaint_type_total_count fallback used; "
+                    "no historical match for complaint_type"
+                )
 
     if "zip_total_complaints" in row:
         lookup = maps.get("zip_total_complaints")
-        if zip_code and lookup is not None and zip_code in lookup:
+        if zip_code and lookup is not None and zip_code in lookup.index:
             row["zip_total_complaints"] = float(lookup[zip_code])
+            print("Looked up zip_total_complaints from historical data")
         else:
             row["zip_total_complaints"] = defaults.get("zip_total_complaints", 0)
-            warnings.append("zip_total_complaints fallback used")
+            warnings.append(
+                "zip_total_complaints fallback used; no historical match for zip_code"
+            )
 
     if "zip_type_complaint_count" in row:
         lookup = maps.get("zip_type_complaint_count")
         key = (zip_code, complaint_type)
-        if zip_code and complaint_type and lookup is not None and key in lookup:
+        if (
+            zip_code
+            and complaint_type
+            and lookup is not None
+            and key in lookup.index
+        ):
             row["zip_type_complaint_count"] = float(lookup[key])
+            print("Looked up zip_type_complaint_count from historical data")
         else:
             row["zip_type_complaint_count"] = defaults.get(
                 "zip_type_complaint_count", 0
             )
-            warnings.append("zip_type_complaint_count fallback used")
+            suggestions = _suggest_complaint_types(
+                maps.get("complaint_type_total_count"), complaint_type
+            )
+            if suggestions:
+                warnings.append(
+                    "zip_type_complaint_count fallback used; "
+                    "closest complaint_type examples: "
+                    f"{', '.join(suggestions)}"
+                )
+            else:
+                warnings.append(
+                    "zip_type_complaint_count fallback used; "
+                    "no historical match for zip_code + complaint_type"
+                )
 
 
 def _risk_band(probability: float) -> str:
@@ -198,12 +297,13 @@ def main() -> None:
         )
 
     df = load_feature_data()
-    feature_cols = select_feature_columns(df, "delayed_30")
+    feature_cols = get_feature_columns(df, "delayed_30", project_root / "reports")
 
     defaults = _build_defaults(df, feature_cols)
     maps = _build_aggregate_maps(df)
 
     user_input = _load_input(Path(args.input)) if args.input else _load_input(None)
+    _validate_input_keys(user_input)
     row = defaults.copy()
     row = _apply_input(row, user_input, feature_cols)
 

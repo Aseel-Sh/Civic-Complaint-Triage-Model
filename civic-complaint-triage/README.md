@@ -103,7 +103,7 @@ Latest results (time-based split, 80/20) for the 30-day target:
 
 Random forest threshold summary (primary target: delayed_30):
 - Default threshold (0.5): accuracy 0.601, precision 0.586, recall 0.978, F1 0.733, ROC-AUC 0.690
-- Balanced-rate threshold (0.7): precision 0.685, recall 0.719, F1 0.702
+- Balanced-rate threshold: read from `reports/model_metrics_delayed_30.csv` after training; if the saved value is missing, `zip_error_analysis.py` falls back to 0.7 with a warning.
 - Actual delayed rate: 0.558; balanced-rate predicted delayed rate: 0.586
 
 Plain-English interpretation:
@@ -139,7 +139,7 @@ Feature importance:
 ## Geographic Error Analysis
 This project includes a basic ZIP-level error analysis to check whether model errors vary across high-volume ZIP codes. It is not a fairness audit and should not be used to rank neighborhoods or allocate services automatically. Complaint data can reflect reporting behavior and service patterns, so geographic comparisons require caution. The goal is to see whether model error rates differ across the ZIP codes with the most complaints.
 
-To check whether model behavior varied across high-volume ZIP codes, I compared actual and predicted delayed rates for the top 10 ZIP codes in the test set using the delayed_30 random forest model at the balanced threshold of 0.7.
+To check whether model behavior varied across high-volume ZIP codes, I compared actual and predicted delayed rates for the top 10 ZIP codes in the test set using the delayed_30 random forest model at the balanced threshold reported in `reports/model_metrics_delayed_30.csv`.
 
 The model’s predicted delayed rates were reasonably close to observed rates for several ZIP codes, but there were visible differences. For example, ZIP 19132 had an observed delayed rate of about 0.59 but a predicted delayed rate of about 0.73, while ZIP 19146 had an observed delayed rate of about 0.54 but a predicted delayed rate of about 0.38. This suggests that the model may overestimate delay risk in some areas and underestimate it in others.
 

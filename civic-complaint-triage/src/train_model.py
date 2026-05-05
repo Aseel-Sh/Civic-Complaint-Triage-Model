@@ -19,6 +19,22 @@ from sklearn.ensemble import RandomForestClassifier
 from preprocess_utils import to_string_array
 
 
+SAFE_FEATURES = [
+    "complaint_type",
+    "complaint_source",
+    "zip_code",
+    "council_district",
+    "lat",
+    "lng",
+    "submitted_month",
+    "submitted_dayofweek",
+    "is_weekend",
+    "complaint_type_total_count",
+    "zip_total_complaints",
+    "zip_type_complaint_count",
+]
+
+
 def load_feature_data() -> pd.DataFrame:
     project_root = Path(__file__).resolve().parents[1]
     features_path = project_root / "data" / "processed" / "complaints_features.csv"
@@ -29,80 +45,52 @@ def load_feature_data() -> pd.DataFrame:
     return pd.read_csv(features_path, low_memory=False)
 
 
-def _is_leakage_column(column: str) -> bool:
-    lower = column.lower()
-    safe_keywords = [
-        "complaint_type",
-        "complaint_source",
-        "zip_code",
-        "lat",
-        "lng",
-        "submitted_month",
-        "submitted_dayofweek",
-        "is_weekend",
-        "complaint_type_total_count",
-        "zip_total_complaints",
-        "zip_type_complaint_count",
-    ]
-    if any(safe_key in lower for safe_key in safe_keywords):
-        return False
-
-    leak_keywords = [
-        "days_to_resolution",
-        "closed",
-        "close",
-        "resolved",
-        "resolution",
-        "outcome",
-        "final",
-        "completed",
-        "completion",
-        "violation",
-        "inspection result",
-        "status",
-        "delayed",
-    ]
-    return any(keyword in lower for keyword in leak_keywords)
-
-
-def _save_selected_features(features: list[str], reports_dir: Path) -> None:
-    output_path = reports_dir / "selected_features.txt"
+def _save_selected_features(
+    features: list[str], reports_dir: Path, target_column: str
+) -> None:
+    suffix = f"_{target_column}" if target_column else ""
+    output_path = reports_dir / f"selected_features{suffix}.txt"
     output_path.write_text("\n".join(features))
 
 
-def select_feature_columns(df: pd.DataFrame, target_column: str) -> list[str]:
-    exclude = {target_column}
-    candidate_cols = [col for col in df.columns if col not in exclude]
-
-    # Leakage checks matter because post-outcome fields can inflate performance.
-    candidate_cols = [col for col in candidate_cols if not _is_leakage_column(col)]
-    candidate_cols = [col for col in candidate_cols if not col.lower().endswith("_id")]
-    candidate_cols = [
-        col for col in candidate_cols if col.lower() not in {"id", "cartodb_id"}
+def _load_selected_features(
+    reports_dir: Path, target_column: str
+) -> list[str]:
+    suffix = f"_{target_column}" if target_column else ""
+    input_path = reports_dir / f"selected_features{suffix}.txt"
+    if not input_path.exists():
+        return []
+    return [
+        line.strip()
+        for line in input_path.read_text().splitlines()
+        if line.strip()
     ]
 
-    datetime_cols = df[candidate_cols].select_dtypes(include=["datetime64[ns]"]).columns
-    candidate_cols = [col for col in candidate_cols if col not in datetime_cols]
 
-    if "opened_date" in candidate_cols:
-        candidate_cols.remove("opened_date")
+def select_feature_columns(df: pd.DataFrame, target_column: str) -> list[str]:
+    # The model only uses fields that would be available near complaint submission
+    # time or derived from historical complaint data.
+    return [
+        col for col in SAFE_FEATURES if col in df.columns and col != target_column
+    ]
 
-    # Drop extremely high-cardinality categorical columns to keep feature size manageable.
-    high_cardinality = []
-    protected_categoricals = {"complaint_type", "complaint_source", "zip_code"}
-    for col in candidate_cols:
-        if df[col].dtype == "object" or str(df[col].dtype).startswith("string"):
-            unique_count = df[col].nunique(dropna=True)
-            if unique_count > 5000 and col not in protected_categoricals:
-                high_cardinality.append(col)
 
-    if high_cardinality:
-        print("Dropping high-cardinality categorical columns:")
-        for col in high_cardinality:
-            print(f"- {col}")
-        candidate_cols = [col for col in candidate_cols if col not in high_cardinality]
+def get_feature_columns(
+    df: pd.DataFrame, target_column: str, reports_dir: Path | None = None
+) -> list[str]:
+    base = select_feature_columns(df, target_column)
+    if reports_dir is None:
+        return base
 
-    return candidate_cols
+    selected = _load_selected_features(reports_dir, target_column)
+    if not selected:
+        return base
+
+    return [
+        col
+        for col in selected
+        if col in SAFE_FEATURES and col in df.columns and col != target_column
+    ]
 
 
 def split_data(
@@ -258,7 +246,7 @@ def train_models(target_column: str, sample_size: int | None, fast: bool) -> pd.
         sample_count = min(sample_size, len(df))
         df = df.sample(n=sample_count, random_state=42)
         print(f"Using sample size: {len(df)} rows")
-    feature_cols = select_feature_columns(df, target_column)
+    feature_cols = get_feature_columns(df, target_column, reports_dir)
     X_train, X_test, y_train, y_test, split_method = split_data(
         df, feature_cols, target_column
     )
@@ -269,7 +257,7 @@ def train_models(target_column: str, sample_size: int | None, fast: bool) -> pd.
     print(f"Selected features for target '{target_column}':")
     for feature in feature_cols:
         print(f"- {feature}")
-    _save_selected_features(feature_cols, reports_dir)
+    _save_selected_features(feature_cols, reports_dir, target_column)
 
     preprocessor_sparse = build_preprocessor(X_train, sparse_output=True)
     preprocessor_dense = build_preprocessor(X_train, sparse_output=False)

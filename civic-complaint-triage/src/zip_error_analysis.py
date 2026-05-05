@@ -7,7 +7,7 @@ import pandas as pd
 import joblib
 import matplotlib.pyplot as plt
 
-from train_model import load_feature_data, select_feature_columns, split_data
+from train_model import load_feature_data, get_feature_columns, split_data
 
 
 def _safe_rate(numerator: int, denominator: int) -> float:
@@ -65,6 +65,35 @@ def _zip_metrics(group: pd.DataFrame) -> dict:
     }
 
 
+def _load_balanced_threshold(reports_dir: Path, target_column: str) -> float:
+    metrics_path = reports_dir / f"model_metrics_{target_column}.csv"
+    if not metrics_path.exists():
+        print(
+            f"Warning: metrics file not found at {metrics_path}. "
+            "Falling back to threshold 0.7."
+        )
+        return 0.7
+
+    metrics_df = pd.read_csv(metrics_path)
+    rf_row = metrics_df[metrics_df["model"] == "random_forest"]
+    if rf_row.empty:
+        print(
+            "Warning: random_forest row not found in model metrics. "
+            "Falling back to threshold 0.7."
+        )
+        return 0.7
+
+    value = rf_row["balanced_rate_threshold"].iloc[0]
+    if pd.isna(value):
+        print(
+            "Warning: balanced_rate_threshold missing in model metrics. "
+            "Falling back to threshold 0.7."
+        )
+        return 0.7
+
+    return float(value)
+
+
 def main() -> None:
     project_root = Path(__file__).resolve().parents[1]
     reports_dir = project_root / "reports"
@@ -73,7 +102,7 @@ def main() -> None:
     figures_dir.mkdir(parents=True, exist_ok=True)
 
     target_column = "delayed_30"
-    threshold = 0.7
+    threshold = _load_balanced_threshold(reports_dir, target_column)
 
     df = load_feature_data()
     if target_column not in df.columns:
@@ -89,7 +118,7 @@ def main() -> None:
         return
 
     # Reuse the same feature selection and time-based split as evaluation.
-    feature_cols = select_feature_columns(df, target_column)
+    feature_cols = get_feature_columns(df, target_column, reports_dir)
     X_train, X_test, y_train, y_test, split_method = split_data(
         df, feature_cols, target_column
     )

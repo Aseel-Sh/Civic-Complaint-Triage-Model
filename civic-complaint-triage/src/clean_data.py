@@ -14,6 +14,16 @@ def _find_column(columns: list[str], keywords: list[str]) -> str | None:
     return None
 
 
+def _find_readable_column(
+    columns: list[str], keywords: list[str], blocked: list[str]
+) -> str | None:
+    for key in keywords:
+        for col in columns:
+            if key in col and not any(block in col for block in blocked):
+                return col
+    return None
+
+
 def _infer_date_columns(df: pd.DataFrame) -> tuple[str | None, str | None]:
     original_cols = list(df.columns)
     lower_cols = [col.lower() for col in original_cols]
@@ -107,13 +117,48 @@ def clean_data() -> pd.DataFrame:
     lower_cols = [col.lower() for col in df.columns]
     original_cols = list(df.columns)
 
-    complaint_type_col = _find_column(
+    # complaint_type must be a readable complaint category, not an ID.
+    # Prefer complaintcodename when available; fall back to other label columns.
+    blocked_type_tokens = [
+        "complaintnumber",
+        "casenumber",
+        "objectid",
+        "addressobjectid",
+        "parcel",
+        "parcel_id",
+        "ticket",
+        "jobid",
+        "account",
+        "opa",
+        "number",
+        "_id",
+    ]
+    complaint_type_col = _find_readable_column(
         lower_cols,
-        ["complaint_type", "complaint", "type", "category", "subject", "issue"],
+        [
+            "complaintcodename",
+            "complaint_type",
+            "complaint type",
+            "complaint_category",
+            "complaint category",
+            "category",
+            "subject",
+            "issue",
+            "type_name",
+            "type name",
+        ],
+        blocked_type_tokens,
     )
     complaint_source_col = _find_column(
         lower_cols,
-        ["source", "channel", "method", "intake", "submitted_via"],
+        [
+            "systemofrecord",
+            "source",
+            "channel",
+            "method",
+            "intake",
+            "submitted_via",
+        ],
     )
     zip_col = _find_column(lower_cols, ["zip", "zipcode", "postal"])
     lat_col = _find_column(lower_cols, ["lat", "latitude"])
@@ -121,12 +166,16 @@ def clean_data() -> pd.DataFrame:
 
     if complaint_type_col:
         original = original_cols[lower_cols.index(complaint_type_col)]
-        if "complaint_type" not in df.columns:
-            df["complaint_type"] = df[original]
+        series = df[original].astype("string")
+        series = series.str.strip().str.upper()
+        df["complaint_type"] = series.where(series != "", pd.NA)
     if complaint_source_col:
         original = original_cols[lower_cols.index(complaint_source_col)]
-        if "complaint_source" not in df.columns:
-            df["complaint_source"] = df[original]
+        source_series = df[original].astype("string")
+        source_series = source_series.str.strip().str.upper()
+        df["complaint_source"] = source_series.where(
+            source_series != "", pd.NA
+        )
     if zip_col:
         original = original_cols[lower_cols.index(zip_col)]
         if "zip_code" not in df.columns:
