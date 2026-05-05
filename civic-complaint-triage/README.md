@@ -6,9 +6,16 @@ Create a beginner-friendly model that predicts whether a Philadelphia Licenses a
 ## Why this matters
 City agencies receive large volumes of complaints. A simple triage signal can help prioritize follow-up and improve response planning.
 
+## What this project does
+- Loads public Philadelphia L&I complaint data, cleans and normalizes fields relevant to triage.
+- Engineers simple temporal and aggregate features and trains baseline and random-forest models to predict whether a complaint will be delayed more than 30 days (`delayed_30`).
+- Provides evaluation reports, ZIP-level error analysis, and a scoring script for single or batch inputs using a small, scoring-safe feature set.
+
 ## Dataset
 Public Philadelphia L&I complaint data (CSV):
 https://phl.carto.com/api/v2/sql?q=SELECT+*,+ST_Y(the_geom)+AS+lat,+ST_X(the_geom)+AS+lng+FROM+complaints&filename=complaints&format=csv&skipfields=cartodb_id
+
+Data dictionary: [reports/data_dictionary.md](reports/data_dictionary.md)
 
 ## What the model predicts
 The model predicts a binary label called `delayed_30` for each complaint.
