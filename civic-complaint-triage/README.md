@@ -98,13 +98,13 @@ Latest results (time-based split, 80/20) for the 30-day target:
 | Model | Accuracy | Precision | Recall | F1 | ROC-AUC | Actual delayed rate | Predicted delayed rate |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | majority_baseline | 0.558 | 0.558 | 1.000 | 0.717 | N/A | 0.558 | 1.000 |
-| logistic_regression | 0.601 | 0.590 | 0.930 | 0.722 | 0.654 | 0.558 | 0.879 |
-| random_forest | 0.601 | 0.586 | 0.978 | 0.733 | 0.690 | 0.558 | 0.932 |
+| logistic_regression | 0.612 | 0.613 | 0.828 | 0.704 | 0.645 | 0.558 | 0.754 |
+| random_forest | 0.606 | 0.601 | 0.873 | 0.712 | 0.632 | 0.558 | 0.810 |
 
 Random forest threshold summary (primary target: delayed_30):
-- Default threshold (0.5): accuracy 0.601, precision 0.586, recall 0.978, F1 0.733, ROC-AUC 0.690
+- Default threshold (0.5): accuracy 0.606, precision 0.601, recall 0.873, F1 0.712, ROC-AUC 0.632
 - Balanced-rate threshold: read from `reports/model_metrics_delayed_30.csv` after training; if the saved value is missing, `zip_error_analysis.py` falls back to 0.7 with a warning.
-- Actual delayed rate: 0.558; balanced-rate predicted delayed rate: 0.586
+- Actual delayed rate: 0.558; balanced-rate predicted delayed rate: 0.516
 
 Plain-English interpretation:
 - At the default threshold, the model is a high-recall screening tool that over-flags non-delayed complaints.
@@ -190,6 +190,7 @@ The script prints a probability, default and balanced threshold predictions, and
     - `reports/figures/*`
     - `reports/random_forest_feature_importance.csv`
     - `reports/selected_features.txt`
+    - `reports/selected_features_delayed_30.txt`
 - Troubleshooting: if models do not exist, run `train_model.py` before `evaluate_model.py`.
 
 ## Limitations
