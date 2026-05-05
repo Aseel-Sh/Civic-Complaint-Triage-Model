@@ -98,13 +98,14 @@ Latest results (time-based split, 80/20) for the 30-day target:
 | Model | Accuracy | Precision | Recall | F1 | ROC-AUC | Actual delayed rate | Predicted delayed rate |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | majority_baseline | 0.558 | 0.558 | 1.000 | 0.717 | N/A | 0.558 | 1.000 |
-| logistic_regression | 0.601 | 0.590 | 0.930 | 0.722 | 0.654 | 0.558 | 0.879 |
-| random_forest | 0.601 | 0.586 | 0.978 | 0.733 | 0.690 | 0.558 | 0.932 |
+| logistic_regression | 0.612 | 0.613 | 0.828 | 0.704 | 0.645 | 0.558 | 0.754 |
+| random_forest | 0.606 | 0.601 | 0.873 | 0.712 | 0.632 | 0.558 | 0.810 |
 
 Random forest threshold summary (primary target: delayed_30):
-- Default threshold (0.5): accuracy 0.601, precision 0.586, recall 0.978, F1 0.733, ROC-AUC 0.690
+- Default threshold (0.5): accuracy 0.606, precision 0.601, recall 0.873, F1 0.712, ROC-AUC 0.632
 - Balanced-rate threshold: read from `reports/model_metrics_delayed_30.csv` after training; if the saved value is missing, `zip_error_analysis.py` falls back to 0.7 with a warning.
-- Actual delayed rate: 0.558; balanced-rate predicted delayed rate: 0.586
+- Balanced-rate threshold value: 0.6
+- Actual delayed rate: 0.558; balanced-rate predicted delayed rate: 0.516
 
 Plain-English interpretation:
 - At the default threshold, the model is a high-recall screening tool that over-flags non-delayed complaints.
@@ -141,7 +142,7 @@ This project includes a basic ZIP-level error analysis to check whether model er
 
 To check whether model behavior varied across high-volume ZIP codes, I compared actual and predicted delayed rates for the top 10 ZIP codes in the test set using the delayed_30 random forest model at the balanced threshold reported in `reports/model_metrics_delayed_30.csv`.
 
-The model’s predicted delayed rates were reasonably close to observed rates for several ZIP codes, but there were visible differences. For example, ZIP 19132 had an observed delayed rate of about 0.59 but a predicted delayed rate of about 0.73, while ZIP 19146 had an observed delayed rate of about 0.54 but a predicted delayed rate of about 0.38. This suggests that the model may overestimate delay risk in some areas and underestimate it in others.
+The model’s predicted delayed rates were reasonably close to observed rates for several ZIP codes, but there were visible differences. For example, ZIP 19134 had an observed delayed rate of about 0.60 but a predicted delayed rate of about 0.53, while ZIP 19146 had an observed delayed rate of about 0.54 but a predicted delayed rate of about 0.35. This suggests that the model may overestimate delay risk in some areas and underestimate it in others.
 
 This is a basic geographic error analysis, not a full fairness audit. Complaint data may reflect differences in reporting behavior, workload, property conditions, and city service patterns. These results should not be used to rank neighborhoods or allocate services automatically.
 
@@ -155,6 +156,22 @@ python src/score_complaint.py --input examples/sample_complaint.json
 ```
 
 The script prints a probability, default and balanced threshold predictions, and a risk band (low, moderate, high). This should not be used to rank neighborhoods or allocate services automatically.
+
+## Batch Scoring
+Batch scoring accepts a CSV of complaint records and writes a scored CSV sorted by delay probability (descending).
+
+```powershell
+python src/score_complaint.py --batch examples/sample_complaints.csv --output reports/scored_sample_complaints.csv
+```
+
+The output CSV includes the original input fields plus:
+- `delay_probability`
+- `default_prediction`
+- `balanced_prediction`
+- `risk_band`
+- `interpretation`
+
+Batch scores are triage signals, not automated decisions.
 
 ## How to interpret the results
 - Accuracy: overall fraction of correct predictions, which can be misleading with class imbalance.
@@ -189,7 +206,7 @@ The script prints a probability, default and balanced threshold predictions, and
     - `reports/threshold_analysis.csv`
     - `reports/figures/*`
     - `reports/random_forest_feature_importance.csv`
-    - `reports/selected_features.txt`
+    - `reports/selected_features_delayed_30.txt`
 - Troubleshooting: if models do not exist, run `train_model.py` before `evaluate_model.py`.
 
 ## Limitations

@@ -84,6 +84,20 @@ def _validate_input_keys(user_input: dict) -> None:
         )
 
 
+def _validate_input_columns(input_df: pd.DataFrame) -> None:
+    extras = sorted(set(input_df.columns) - set(SAFE_FEATURES))
+    if extras:
+        raise ValueError(
+            "Batch input contains unsupported fields. Remove these columns: "
+            + ", ".join(extras)
+        )
+
+    if len(input_df.columns) == 0:
+        raise ValueError(
+            "Batch input has no supported fields. Provide scoring-safe columns."
+        )
+
+
 def _default_value(series: pd.Series):
     if series.dropna().empty:
         return 0
@@ -279,6 +293,47 @@ def _risk_band(probability: float) -> str:
     return "High"
 
 
+def _score_row(
+    model,
+    user_input: dict,
+    feature_cols: list[str],
+    defaults: dict,
+    maps: dict,
+    *,
+    balanced_threshold: float,
+) -> tuple[float, str, str, str, str, list[str]]:
+    row = defaults.copy()
+    row = _apply_input(row, user_input, feature_cols)
+
+    warnings = []
+    _fill_aggregate_features(row, defaults, maps, warnings)
+
+    feature_row = pd.DataFrame([row], columns=feature_cols)
+
+    if not hasattr(model, "predict_proba"):
+        raise ValueError("Loaded model does not support predict_proba.")
+
+    probability = float(model.predict_proba(feature_row)[:, 1][0])
+    default_pred = "Delayed" if probability >= 0.5 else "Not delayed"
+    balanced_pred = (
+        "Delayed" if probability >= balanced_threshold else "Not delayed"
+    )
+    band = _risk_band(probability)
+    interpretation = (
+        f"This complaint has {band.lower()} delay risk. "
+        "It should be treated as a triage signal, not an automated decision."
+    )
+
+    return (
+        probability,
+        default_pred,
+        balanced_pred,
+        band,
+        interpretation,
+        warnings,
+    )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Score a complaint for 30-day delay risk.")
     parser.add_argument(
@@ -287,7 +342,24 @@ def main() -> None:
         default=None,
         help="Path to a JSON file with complaint fields.",
     )
+    parser.add_argument(
+        "--batch",
+        type=str,
+        default=None,
+        help="Path to a CSV file with complaint fields (batch scoring).",
+    )
+    parser.add_argument(
+        "--output",
+        type=str,
+        default=None,
+        help="Path to save batch scoring output CSV.",
+    )
     args = parser.parse_args()
+
+    if args.batch and args.input:
+        raise ValueError("Use either --input or --batch, not both.")
+    if args.batch and not args.output:
+        raise ValueError("--output is required when using --batch.")
 
     project_root = Path(__file__).resolve().parents[1]
     model_path = project_root / "models" / "random_forest_delayed_30.pkl"
@@ -302,24 +374,80 @@ def main() -> None:
     defaults = _build_defaults(df, feature_cols)
     maps = _build_aggregate_maps(df)
 
+    model = joblib.load(model_path)
+
+    if args.batch:
+        batch_path = Path(args.batch)
+        if not batch_path.exists():
+            raise FileNotFoundError(f"Batch CSV not found at {batch_path}")
+        batch_df = pd.read_csv(batch_path)
+        _validate_input_columns(batch_df)
+
+        output_rows = []
+        for index, record in batch_df.iterrows():
+            user_input = record.to_dict()
+            _validate_input_keys(user_input)
+            (
+                probability,
+                default_pred,
+                balanced_pred,
+                band,
+                interpretation,
+                warnings,
+            ) = _score_row(
+                model,
+                user_input,
+                feature_cols,
+                defaults,
+                maps,
+                balanced_threshold=0.7,
+            )
+
+            if warnings:
+                print(f"\nWarnings for row {index}:")
+                for warning in warnings:
+                    print(f"- {warning}")
+
+            output_row = {col: user_input.get(col) for col in batch_df.columns}
+            output_row.update(
+                {
+                    "delay_probability": round(probability, 6),
+                    "default_prediction": default_pred,
+                    "balanced_prediction": balanced_pred,
+                    "risk_band": band,
+                    "interpretation": interpretation,
+                }
+            )
+            output_rows.append(output_row)
+
+        output_df = pd.DataFrame(output_rows)
+        output_df = output_df.sort_values(
+            "delay_probability", ascending=False
+        )
+
+        output_path = Path(args.output)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_df.to_csv(output_path, index=False)
+        print(f"Saved batch scoring output to {output_path}")
+        return
+
     user_input = _load_input(Path(args.input)) if args.input else _load_input(None)
     _validate_input_keys(user_input)
-    row = defaults.copy()
-    row = _apply_input(row, user_input, feature_cols)
-
-    warnings = []
-    _fill_aggregate_features(row, defaults, maps, warnings)
-
-    feature_row = pd.DataFrame([row], columns=feature_cols)
-
-    model = joblib.load(model_path)
-    if not hasattr(model, "predict_proba"):
-        raise ValueError("Loaded model does not support predict_proba.")
-
-    probability = float(model.predict_proba(feature_row)[:, 1][0])
-    default_pred = "Delayed" if probability >= 0.5 else "Not delayed"
-    balanced_pred = "Delayed" if probability >= 0.7 else "Not delayed"
-    band = _risk_band(probability)
+    (
+        probability,
+        default_pred,
+        balanced_pred,
+        band,
+        interpretation,
+        warnings,
+    ) = _score_row(
+        model,
+        user_input,
+        feature_cols,
+        defaults,
+        maps,
+        balanced_threshold=0.7,
+    )
 
     print(f"30-Day Delay Risk Score: {probability:.2f}")
     print(f"Default threshold prediction: {default_pred}")
@@ -344,10 +472,7 @@ def main() -> None:
         "default_prediction": default_pred,
         "balanced_prediction": balanced_pred,
         "risk_band": band,
-        "interpretation": (
-            f"This complaint has {band.lower()} delay risk. "
-            "It should be treated as a triage signal, not an automated decision."
-        ),
+        "interpretation": interpretation,
     }
 
     reports_dir = project_root / "reports"
