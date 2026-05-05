@@ -89,13 +89,12 @@ def _load_input(path: Path | None) -> dict:
 
 
 def _validate_input_keys(user_input: dict) -> None:
-    extras = sorted({key for key in user_input.keys()} - set(INPUT_FIELDS))
+    extras = sorted({key for key in user_input.keys()} - set(SAFE_FEATURES))
     if extras:
         raise ValueError(
             "Input contains unsupported fields. Remove these keys: "
             + ", ".join(extras)
         )
-
 
 def _validate_input_columns(input_df: pd.DataFrame) -> None:
     extras = sorted(set(input_df.columns) - set(INPUT_FIELDS))
@@ -109,7 +108,6 @@ def _validate_input_columns(input_df: pd.DataFrame) -> None:
         raise ValueError(
             "Batch input has no supported fields. Provide scoring-safe columns."
         )
-
 
 def _default_value(series: pd.Series):
     if series.dropna().empty:
